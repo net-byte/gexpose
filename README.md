@@ -7,6 +7,11 @@ A net tool that exposes local service to public.
 ![image](https://img.shields.io/badge/License-MIT-orange)
 ![image](https://img.shields.io/badge/License-Anti--996-red)
 
+# Architecture
+<p>
+	<img src="https://github.com/net-byte/gexpose/raw/main/assets/gexpose.png" alt="gexpose" width="900">
+</p>
+
 # Usage
 
 ```
@@ -47,4 +52,4 @@ docker run  -d --privileged --restart=always --net=host --name gexpose-server ne
 ```
 
 # License
-[The MIT License (MIT)](https://raw.githubusercontent.com/net-byte/opensocks/main/LICENSE)
+[The MIT License (MIT)](https://raw.githubusercontent.com/net-byte/gexpose/main/LICENSE)
