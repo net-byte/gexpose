@@ -39,7 +39,6 @@ func read(conn net.Conn, config config.Config) {
 		switch b[0] {
 		case enum.PING:
 			conn.Write([]byte{enum.PONG})
-		case enum.PONG:
 		case enum.CONNECT:
 			go proxy(config)
 		case enum.CLOSE:
