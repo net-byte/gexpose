@@ -1,9 +1,5 @@
 package config
 
-import (
-	"github.com/net-byte/gexpose/common/cipher"
-)
-
 type Config struct {
 	LocalAddr  string
 	ProxyAddr  string
@@ -12,8 +8,4 @@ type Config struct {
 	Key        string
 	ServerMode bool
 	Timeout    int
-}
-
-func (config *Config) Init() {
-	cipher.GenerateKey(config.Key)
 }

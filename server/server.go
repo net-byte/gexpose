@@ -31,7 +31,7 @@ func Start(config config.Config) {
 	go listenExposeAddr(config)
 	go listenProxyAddr(config)
 	go cleanJob()
-	forwardJob()
+	forwardJob(config)
 }
 
 func listenServerAddr(config config.Config) {
@@ -70,12 +70,9 @@ func read(conn net.Conn, config config.Config) {
 		switch b[0] {
 		case enum.PING:
 			conn.Write([]byte{enum.PONG})
-			break
 		case enum.PONG:
-			break
 		case enum.CLOSE:
 			conn.Close()
-			break
 		default:
 			log.Printf("received an unsupported msg from client")
 		}
@@ -145,7 +142,7 @@ func mappingProxyConn(conn *net.Conn) {
 	_lock.Lock()
 	mapped := false
 	for _, mapping := range _connPool {
-		if mapping.mapped == false && mapping.exposeConn != nil {
+		if !mapping.mapped && mapping.exposeConn != nil {
 			mapping.proxyConn = conn
 			mapping.mapped = true
 			mapped = true
@@ -159,15 +156,15 @@ func mappingProxyConn(conn *net.Conn) {
 	_notifyIncomingProxyConn <- 0
 }
 
-func forwardJob() {
+func forwardJob(config config.Config) {
 	for {
 		select {
 		case <-_notifyIncomingProxyConn:
 			_lock.Lock()
 			for key, mapping := range _connPool {
 				if mapping.mapped && mapping.proxyConn != nil && mapping.exposeConn != nil {
-					go netutil.Copy(*mapping.exposeConn, *mapping.proxyConn)
-					go netutil.Copy(*mapping.proxyConn, *mapping.exposeConn)
+					go netutil.Copy(*mapping.exposeConn, *mapping.proxyConn, config.Key)
+					go netutil.Copy(*mapping.proxyConn, *mapping.exposeConn, config.Key)
 					delete(_connPool, key)
 				}
 			}
@@ -180,7 +177,7 @@ func cleanJob() {
 	for {
 		_lock.Lock()
 		for key, mapping := range _connPool {
-			if mapping.mapped == false && mapping.exposeConn != nil {
+			if !mapping.mapped && mapping.exposeConn != nil {
 				if time.Now().Unix()-mapping.addTime > 10 {
 					log.Printf("clean the expired conn %v", (*mapping.exposeConn).RemoteAddr().String())
 					(*mapping.exposeConn).Close()

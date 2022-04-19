@@ -39,15 +39,11 @@ func read(conn net.Conn, config config.Config) {
 		switch b[0] {
 		case enum.PING:
 			conn.Write([]byte{enum.PONG})
-			break
 		case enum.PONG:
-			break
 		case enum.CONNECT:
 			go proxy(config)
-			break
 		case enum.CLOSE:
 			conn.Close()
-			break
 		default:
 			log.Printf("received an unsupported msg from server")
 		}
@@ -78,6 +74,6 @@ func proxy(config config.Config) {
 		proxyConn.Close()
 		return
 	}
-	go netutil.Copy(proxyConn, localConn)
-	go netutil.Copy(localConn, proxyConn)
+	go netutil.Copy(proxyConn, localConn, config.Key)
+	go netutil.Copy(localConn, proxyConn, config.Key)
 }
