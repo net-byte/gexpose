@@ -44,7 +44,6 @@ func read(conn net.Conn, config config.Config) {
 		case enum.CLOSE:
 			conn.Close()
 		default:
-			log.Printf("received an unsupported msg from server")
 		}
 	}
 }
