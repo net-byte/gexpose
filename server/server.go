@@ -100,6 +100,10 @@ func listenExposeAddr(config config.Config) {
 		if err != nil {
 			continue
 		}
+		if _clientConn == nil {
+			conn.Close()
+			continue
+		}
 		addConn(&conn)
 		notityClient()
 	}
@@ -111,10 +115,6 @@ func addConn(conn *net.Conn) {
 }
 
 func notityClient() {
-	if _clientConn == nil {
-		log.Printf("no client connected")
-		return
-	}
 	_clientConn.Write([]byte{enum.CONNECT})
 }
 
