@@ -14,9 +14,8 @@ import (
 )
 
 var _clientConn net.Conn
-var _connPool = make(map[string]*ConnMapping)
-var _lock = sync.Mutex{}
-var _notifyIncomingProxyConn = make(chan int)
+var _connPool sync.Map
+var _notifyNewProxyConn = make(chan int)
 
 type ConnMapping struct {
 	proxyConn  *net.Conn
@@ -30,7 +29,7 @@ func Start(config config.Config) {
 	go listenServerAddr(config)
 	go listenExposeAddr(config)
 	go listenProxyAddr(config)
-	go cleanJob()
+	go cleanJob(config)
 	forwardJob(config)
 }
 
@@ -51,7 +50,7 @@ func listenServerAddr(config config.Config) {
 			continue
 		}
 		_clientConn = conn
-		log.Printf("an incoming client connection from %v", _clientConn.RemoteAddr().String())
+		log.Printf("a new client connection from %v", _clientConn.RemoteAddr().String())
 		go read(_clientConn, config)
 		go ping(_clientConn, config)
 	}
@@ -107,10 +106,8 @@ func listenExposeAddr(config config.Config) {
 }
 
 func addConn(conn *net.Conn) {
-	_lock.Lock()
-	defer _lock.Unlock()
-	now := time.Now().UnixNano()
-	_connPool[strconv.FormatInt(now, 10)] = &ConnMapping{nil, conn, time.Now().Unix(), false}
+	key := strconv.FormatInt(time.Now().UnixNano(), 10)
+	_connPool.Store(key, &ConnMapping{nil, conn, time.Now().Unix(), false})
 }
 
 func notityClient() {
@@ -137,62 +134,64 @@ func listenProxyAddr(config config.Config) {
 }
 
 func mappingProxyConn(conn *net.Conn) {
-	_lock.Lock()
 	mapped := false
-	for _, mapping := range _connPool {
+	_connPool.Range(func(k, v interface{}) bool {
+		mapping := v.(*ConnMapping)
 		if !mapping.mapped && mapping.exposeConn != nil {
 			mapping.proxyConn = conn
 			mapping.mapped = true
 			mapped = true
-			break
+			return false
 		}
-	}
+		return true
+	})
 	if !mapped {
 		(*conn).Close()
+		return
 	}
-	_lock.Unlock()
-	_notifyIncomingProxyConn <- 0
+	_notifyNewProxyConn <- 0
 }
 
 func forwardJob(config config.Config) {
 	for {
 		select {
-		case <-_notifyIncomingProxyConn:
-			_lock.Lock()
-			for key, mapping := range _connPool {
+		case <-_notifyNewProxyConn:
+			_connPool.Range(func(k, v interface{}) bool {
+				mapping := v.(*ConnMapping)
 				if mapping.mapped && mapping.proxyConn != nil && mapping.exposeConn != nil {
 					go netutil.Copy(*mapping.exposeConn, *mapping.proxyConn, config.Key)
 					go netutil.Copy(*mapping.proxyConn, *mapping.exposeConn, config.Key)
-					delete(_connPool, key)
+					_connPool.Delete(k)
 				}
-			}
-			_lock.Unlock()
+				return true
+			})
 		}
 	}
 }
 
-func cleanJob() {
+func cleanJob(config config.Config) {
 	for {
-		_lock.Lock()
-		for key, mapping := range _connPool {
+		_connPool.Range(func(k, v interface{}) bool {
+			mapping := v.(*ConnMapping)
 			if !mapping.mapped && mapping.exposeConn != nil {
-				if time.Now().Unix()-mapping.addTime > 10 {
+				if time.Now().Unix()-mapping.addTime > int64(config.Timeout) {
 					log.Printf("clean the expired conn %v", (*mapping.exposeConn).RemoteAddr().String())
 					(*mapping.exposeConn).Close()
-					delete(_connPool, key)
+					_connPool.Delete(k)
 				}
 			}
-		}
-		_lock.Unlock()
-		time.Sleep(5 * time.Second)
+			return true
+		})
+		time.Sleep(10 * time.Second)
 	}
 }
 
 func cleanClient() {
 	log.Println("client disconnected")
 	_clientConn = nil
-	for k := range _connPool {
-		delete(_connPool, k)
-	}
-	log.Println("clean all connections")
+	_connPool.Range(func(k, v interface{}) bool {
+		_connPool.Delete(k)
+		return true
+	})
+	log.Println("clean conn pool")
 }

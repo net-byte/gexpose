@@ -3,21 +3,16 @@ package netutil
 import (
 	"crypto/rc4"
 	"io"
-	"log"
 	"net"
 )
 
 func Copy(src, dst net.Conn, key string) {
+	if src == nil || dst == nil || key == "" {
+		return
+	}
 	defer dst.Close()
 	defer src.Close()
-	var cipher *rc4.Cipher
-	var err error
-	if len(key) > 0 {
-		cipher, err = rc4.NewCipher([]byte(key))
-		if err != nil {
-			log.Fatalln(err)
-		}
-	}
+	cipher, _ := rc4.NewCipher([]byte(key))
 	buf := make([]byte, 64*1024)
 	for {
 		n, err := src.Read(buf)
