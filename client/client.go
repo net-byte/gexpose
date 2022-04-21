@@ -43,7 +43,6 @@ func read(conn net.Conn, config config.Config) {
 			go proxy(config)
 		case enum.CLOSE:
 			conn.Close()
-		default:
 		}
 	}
 }
