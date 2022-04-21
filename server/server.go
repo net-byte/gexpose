@@ -13,9 +13,12 @@ import (
 	"github.com/net-byte/gexpose/config"
 )
 
-var _clientConn net.Conn
-var _connPool sync.Map
-var _notifyNewProxyConn = make(chan int)
+type Server struct {
+	config             config.Config
+	clientConn         net.Conn
+	connPool           sync.Map
+	notifyNewProxyConn chan int
+}
 
 type ConnMapping struct {
 	proxyConn  *net.Conn
@@ -26,41 +29,43 @@ type ConnMapping struct {
 
 // Start server
 func Start(config config.Config) {
-	go listenServerAddr(config)
-	go listenExposeAddr(config)
-	go listenProxyAddr(config)
-	go cleanJob(config)
-	forwardJob(config)
+	log.Println("server started")
+	s := &Server{config: config, notifyNewProxyConn: make(chan int)}
+	go s.listenServerAddr()
+	go s.listenExposeAddr()
+	go s.listenProxyAddr()
+	go s.cleanJob()
+	s.forwardJob()
 }
 
-func listenServerAddr(config config.Config) {
-	ln, err := net.Listen("tcp", config.ServerAddr)
+func (s *Server) listenServerAddr() {
+	ln, err := net.Listen("tcp", s.config.ServerAddr)
 	if err != nil {
 		log.Panic(err)
 	}
-	log.Printf("server address is %v", config.ServerAddr)
+	log.Printf("server address is %v", s.config.ServerAddr)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			continue
 		}
-		if _clientConn != nil {
+		if s.clientConn != nil {
 			log.Printf("client already connected")
 			conn.Close()
 			continue
 		}
-		_clientConn = conn
-		log.Printf("a new client connection from %v", _clientConn.RemoteAddr().String())
-		go read(_clientConn, config)
-		go ping(_clientConn, config)
+		s.clientConn = conn
+		log.Printf("a new client connection from %v", s.clientConn.RemoteAddr().String())
+		go s.read(s.clientConn)
+		go s.ping(s.clientConn)
 	}
 }
 
-func read(conn net.Conn, config config.Config) {
+func (s *Server) read(conn net.Conn) {
 	defer conn.Close()
 	packet := make([]byte, 1024)
 	for {
-		conn.SetReadDeadline(time.Now().Add(time.Duration(config.Timeout) * time.Second))
+		conn.SetReadDeadline(time.Now().Add(time.Duration(s.config.Timeout) * time.Second))
 		n, err := conn.Read(packet)
 		if err != nil || err == io.EOF {
 			break
@@ -71,71 +76,70 @@ func read(conn net.Conn, config config.Config) {
 			conn.Write([]byte{enum.PONG})
 		case enum.CLOSE:
 			conn.Close()
-		default:
 		}
 	}
 }
 
-func ping(conn net.Conn, config config.Config) {
+func (s *Server) ping(conn net.Conn) {
 	defer conn.Close()
 	for {
-		conn.SetWriteDeadline(time.Now().Add(time.Duration(config.Timeout) * time.Second))
+		conn.SetWriteDeadline(time.Now().Add(time.Duration(s.config.Timeout) * time.Second))
 		_, err := conn.Write([]byte{enum.PING})
 		if err != nil {
 			break
 		}
 		time.Sleep(3 * time.Second)
 	}
-	cleanClient()
+	s.cleanClient()
 }
 
-func listenExposeAddr(config config.Config) {
-	ln, err := net.Listen("tcp", config.ExposeAddr)
+func (s *Server) listenExposeAddr() {
+	ln, err := net.Listen("tcp", s.config.ExposeAddr)
 	if err != nil {
 		log.Panic(err)
 	}
-	log.Printf("expose address is %v", config.ExposeAddr)
+	log.Printf("expose address is %v", s.config.ExposeAddr)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			continue
 		}
-		if _clientConn == nil {
+		if s.clientConn == nil {
 			conn.Close()
 			continue
 		}
-		addConn(&conn)
-		notityClient()
+		s.addConn(&conn)
+		s.notityClient()
 	}
 }
 
-func addConn(conn *net.Conn) {
+func (s *Server) addConn(conn *net.Conn) {
 	key := strconv.FormatInt(time.Now().UnixNano(), 10)
-	_connPool.Store(key, &ConnMapping{nil, conn, time.Now().Unix(), false})
+	s.connPool.Store(key, &ConnMapping{nil, conn, time.Now().Unix(), false})
 }
 
-func notityClient() {
-	_clientConn.Write([]byte{enum.CONNECT})
+func (s *Server) notityClient() {
+	s.clientConn.Write([]byte{enum.CONNECT})
 }
 
-func listenProxyAddr(config config.Config) {
-	ln, err := net.Listen("tcp", config.ProxyAddr)
+func (s *Server) listenProxyAddr() {
+	ln, err := net.Listen("tcp", s.config.ProxyAddr)
 	if err != nil {
 		log.Panic(err)
 	}
-	log.Printf("proxy address is %v", config.ProxyAddr)
+	log.Printf("proxy address is %v", s.config.ProxyAddr)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			continue
 		}
-		mappingProxyConn(&conn)
+		s.mappingProxyConn(&conn)
 	}
 }
 
-func mappingProxyConn(conn *net.Conn) {
+func (s *Server) mappingProxyConn(conn *net.Conn) {
 	mapped := false
-	_connPool.Range(func(k, v interface{}) bool {
+	s.connPool.Range(func(k, v interface{}) bool {
 		mapping := v.(*ConnMapping)
 		if !mapping.mapped && mapping.exposeConn != nil {
 			mapping.proxyConn = conn
@@ -149,19 +153,19 @@ func mappingProxyConn(conn *net.Conn) {
 		(*conn).Close()
 		return
 	}
-	_notifyNewProxyConn <- 0
+	s.notifyNewProxyConn <- 0
 }
 
-func forwardJob(config config.Config) {
+func (s *Server) forwardJob() {
 	for {
 		select {
-		case <-_notifyNewProxyConn:
-			_connPool.Range(func(k, v interface{}) bool {
+		case <-s.notifyNewProxyConn:
+			s.connPool.Range(func(k, v interface{}) bool {
 				mapping := v.(*ConnMapping)
 				if mapping.mapped && mapping.proxyConn != nil && mapping.exposeConn != nil {
-					go netutil.Copy(*mapping.exposeConn, *mapping.proxyConn, config.Key)
-					go netutil.Copy(*mapping.proxyConn, *mapping.exposeConn, config.Key)
-					_connPool.Delete(k)
+					go netutil.Copy(*mapping.exposeConn, *mapping.proxyConn, s.config.Key)
+					go netutil.Copy(*mapping.proxyConn, *mapping.exposeConn, s.config.Key)
+					s.connPool.Delete(k)
 				}
 				return true
 			})
@@ -169,15 +173,15 @@ func forwardJob(config config.Config) {
 	}
 }
 
-func cleanJob(config config.Config) {
+func (s *Server) cleanJob() {
 	for {
-		_connPool.Range(func(k, v interface{}) bool {
+		s.connPool.Range(func(k, v interface{}) bool {
 			mapping := v.(*ConnMapping)
 			if !mapping.mapped && mapping.exposeConn != nil {
-				if time.Now().Unix()-mapping.addTime > int64(config.Timeout) {
+				if time.Now().Unix()-mapping.addTime > int64(s.config.Timeout) {
 					log.Printf("clean the expired conn %v", (*mapping.exposeConn).RemoteAddr().String())
 					(*mapping.exposeConn).Close()
-					_connPool.Delete(k)
+					s.connPool.Delete(k)
 				}
 			}
 			return true
@@ -186,11 +190,11 @@ func cleanJob(config config.Config) {
 	}
 }
 
-func cleanClient() {
+func (s *Server) cleanClient() {
 	log.Println("client disconnected")
-	_clientConn = nil
-	_connPool.Range(func(k, v interface{}) bool {
-		_connPool.Delete(k)
+	s.clientConn = nil
+	s.connPool.Range(func(k, v interface{}) bool {
+		s.connPool.Delete(k)
 		return true
 	})
 	log.Println("clean conn pool")
