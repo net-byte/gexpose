@@ -1,6 +1,8 @@
 # gexpose
 
-A net tool for exposing local service to public.
+A easy-to-use net tool for exposing local service to public.
+
+一款简单易用的内网穿透工具
 
 [![Travis](https://travis-ci.com/net-byte/gexpose.svg?branch=main)](https://github.com/net-byte/gexpose)
 [![Go Report Card](https://goreportcard.com/badge/github.com/net-byte/gexpose)](https://goreportcard.com/report/github.com/net-byte/gexpose)
