@@ -1,6 +1,6 @@
 # gexpose
 
-A easy-to-use net tool for exposing local service to public.
+An easy-to-use net tool for exposing local service to public.
 
 一款简单易用的内网穿透工具
 
