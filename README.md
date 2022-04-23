@@ -42,6 +42,7 @@ sh scripts/build.sh
 ```
 
 ## Docker
+[docker image](https://hub.docker.com/r/netbyte/gexpose)
 
 ### Run client
 ```
