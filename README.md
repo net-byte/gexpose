@@ -53,6 +53,10 @@ docker run  -d --privileged --restart=always --net=host --name gexpose-client ne
 ```
 docker run  -d --privileged --restart=always --net=host --name gexpose-server netbyte/gexpose -server
 ```
+### Client visit
+http: http://public-ip:8703  
+https: https://public-ip:8703  
+ssh: ssh root@public-ip -p 8703
 
 # License
 [The MIT License (MIT)](https://raw.githubusercontent.com/net-byte/gexpose/main/LICENSE)
