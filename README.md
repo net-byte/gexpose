@@ -46,12 +46,14 @@ sh scripts/build.sh
 
 ### Run client
 ```
-docker run  -d --privileged --restart=always --net=host --name gexpose-client netbyte/gexpose -s server-addr:8701 -p server-addr:8702 -l 127.0.0.1:8080
+docker run  -d --privileged --restart=always --net=host --name gexpose-client \
+netbyte/gexpose -s server-addr:8701 -p server-addr:8702 -l 127.0.0.1:9000
 ```
 
 ### Run server
 ```
-docker run  -d --privileged --restart=always --net=host --name gexpose-server netbyte/gexpose -server
+docker run  -d --privileged --restart=always --net=host --name gexpose-server \
+netbyte/gexpose -server
 ```
 ### Client visit
 http: http://public-ip:8703  
