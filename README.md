@@ -8,6 +8,7 @@ An easy-to-use net tool for exposing local service to public.
 [![Go Report Card](https://goreportcard.com/badge/github.com/net-byte/gexpose)](https://goreportcard.com/report/github.com/net-byte/gexpose)
 ![image](https://img.shields.io/badge/License-MIT-orange)
 ![image](https://img.shields.io/badge/License-Anti--996-red)
+![image](https://img.shields.io/github/downloads/net-byte/gexpose/total.svg)
 
 # Architecture
 <p>
